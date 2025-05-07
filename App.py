@@ -75,7 +75,7 @@ def load_animation(animation_url: str):  # animation_url should be always a json
 # 🎯 Streamlit UI
 # -------------------------------
 st.title("Text Extractor 🖨")  
-st_lottie(load_animation(file_animation_url), height=250)
+# st_lottie(load_animation(file_animation_url), height=250)
 st.markdown(f"Upload any kind of document (_Image or PDF_) to extract text.")
 # File upload drag and drop Menu
 uploaded_file = st.file_uploader("Drop your files here",
