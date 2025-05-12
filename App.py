@@ -1,19 +1,20 @@
 import streamlit as st
-import boto3
 from streamlit_lottie import st_lottie
+import boto3
 
 import requests
-import json
 import uuid
 import time
 import os
+import json
 
+# setting s3 Client
 s3 = boto3.client("s3")
 # Name of the s3 storage Buckets
 FILE_STORAGE_S3_BUCKET_NAME = "file-storage-bucket-for-text-extraction"
 TEXT_STORAGE_S3_BUCKET_NAME = "text-storage-bucket-after-text-extraction"
 
-# Setup AWS SQS client
+# Setup your AWS SQS client
 sqs = boto3.client('sqs', region_name='ap-south-1')
 sqs_queue_url = "https://sqs.ap-south-1.amazonaws.com/374694476597/text_status"
 
@@ -38,7 +39,7 @@ def upload_file_object(fileobj):
         st.error(f"ERROR: {e}")
         return None
 
-# -------------------------------s
+# -------------------------------
 # Retrieve Extracted Text from S3
 # -------------------------------
 def get_extracted_text(file_name):
@@ -53,7 +54,7 @@ def get_extracted_text(file_name):
         return None
 
 # -------------------------------
-# Using SQS long polling
+# SQS long Polling for 20 sec
 # -------------------------------
 def text_file_in_sqs(file_key: str, timeout : int = 100):
     start_time= time.time()
@@ -111,8 +112,8 @@ st.title("Text Extractor 🖨")
 # st_lottie(load_animation(file_animation_url), height=250)
 st.markdown(f"Upload any kind of document (_Image or PDF_) to extract text.")
 # File upload drag and drop Menu
-uploaded_file = st.file_uploader("Drop your files here",
-                                 type= ["jpg","jpeg","pdf","png",'webp'],   # Supported File Formats. 
+uploaded_file = st.file_uploader("Upload your files here",
+                                 type= ["jpg", "jpeg","pdf"],   # Supported File Formats. 
                                  accept_multiple_files= False,
                                  label_visibility= "visible")
 
@@ -129,12 +130,12 @@ if uploaded_file is not None:
 
             # crates a placeholder for the animation.
             animation_placeholder = st.empty()
+            extracted_text = None  # to make sure extracted_text always exits even if sqs condition fails to run
             # Displaying progress
             with st.spinner("Extracting Text Please Wait ...", show_time=True):
                 animation_placeholder = st.empty()
                 with animation_placeholder.container():
                     st_lottie(load_animation(wait_animation_url), height=350) 
-
 
                 if text_file_in_sqs(file_name_to_check):        
                     extracted_text = get_extracted_text(file_name=file_name_to_check)
@@ -143,11 +144,13 @@ if uploaded_file is not None:
 
             if extracted_text:  # text extracted Successfully
                 st.success(f"✅ Text extracted successfully!")
-                # st.text_area("📄 Extracted Text", extracted_text, height=700)
-                st.text_area("Extracted_text", extracted_text, height= 300)
+                st.text_area("📄 Extracted Text", extracted_text, height=700)
 
             else:
                 st.error("❌ Failed to retrieve extracted text")
 
         else:
             st.error("❌ Failed to upload the file.")
+
+
+
