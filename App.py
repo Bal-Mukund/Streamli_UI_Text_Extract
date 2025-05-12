@@ -113,7 +113,7 @@ st.title("Text Extractor 🖨")
 st.markdown(f"Upload any kind of document (_Image or PDF_) to extract text.")
 # File upload drag and drop Menu
 uploaded_file = st.file_uploader("Upload your files here",
-                                 type= ["jpg", "jpeg","pdf"],   # Supported File Formats. 
+                                 type= ["jpg", "jpeg","pdf","png"],   # Supported File Formats. 
                                  accept_multiple_files= False,
                                  label_visibility= "visible")
 
