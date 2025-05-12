@@ -13,6 +13,10 @@ s3 = boto3.client("s3")
 FILE_STORAGE_S3_BUCKET_NAME = "file-storage-bucket-for-text-extraction"
 TEXT_STORAGE_S3_BUCKET_NAME = "text-storage-bucket-after-text-extraction"
 
+# Setup AWS SQS client
+sqs = boto3.client('sqs', region_name='ap-south-1')
+sqs_queue_url = "https://sqs.ap-south-1.amazonaws.com/374694476597/text_status"
+
 # -------------------------------
 # Upload File to S3
 # -------------------------------
@@ -37,27 +41,56 @@ def upload_file_object(fileobj):
 # -------------------------------s
 # Retrieve Extracted Text from S3
 # -------------------------------
-def get_extracted_text(file_name, timeout= 100):
-    """
-    Wait up to timeout for the output text file to appear in the S3 bucket.
-    """
-    start_time = time.time()  #  gives the number of seconds passed since 1970.
-    # """ (current time - start_time) gives the total number of seconds, it has been running since.
-    #     if the number of seconds exceeds the timeout (30 seconds) the loop stops"""
-    while time.time() - start_time < timeout:   # Runs for 30 seconds. 
+def get_extracted_text(file_name):
+    try:
+        response = s3.get_object(
+        Bucket= TEXT_STORAGE_S3_BUCKET_NAME,
+        Key= file_name)
+        return response["Body"].read().decode("utf-8")
+    
+    except s3.exceptions.NoSuchKey as e:
+        print(f"Found No such Key: {e}")
+        return None
+
+# -------------------------------
+# Using SQS long polling
+# -------------------------------
+def text_file_in_sqs(file_key: str, timeout : int = 100):
+    start_time= time.time()
+    while time.time() - start_time < timeout:
         try:
-            response = s3.get_object(
-                Bucket= TEXT_STORAGE_S3_BUCKET_NAME,
-                Key= file_name)
-            return response["Body"].read().decode("utf-8")
-        except s3.exceptions.NoSuchKey as e:
-            time.sleep(2)    # Wait for 2 seconds before trying again
-    return None
+            response = sqs.receive_message(
+                QueueUrl= sqs_queue_url,
+                MaxNumberOfMessages=1,
+                VisibilityTimeout=30,
+                WaitTimeSeconds=20)
+        except Exception as e:
+            print(f"Unable to get response from SQS Queue: {e}")
+
+        messages = response.get("Messages", [])
+        for message in messages:
+            try:
+                message_body = json.loads(message.get("Body", {}))
+                body_records = message_body.get("Records", [])
+                s3_info = body_records[0].get("s3", {})
+                created_file_key = s3_info.get("object", {}).get("key", {})
+
+                if created_file_key == file_key:
+                    sqs.delete_message(
+                    QueueUrl=sqs_queue_url,
+                    ReceiptHandle=message["ReceiptHandle"]
+                    )
+                    return True
+                
+            except Exception as e:
+                print(f"error getting the file key; {e}")
+        time.sleep(1)
+    return False 
 
 #--------------------------------
 #lottie animation
 #--------------------------------
-file_animation_url = "https://lottie.host/4d8f7293-ebdd-40df-ac64-046a0f95bf5d/Og3XVZ7MXo.json"
+# file_animation_url = "https://lottie.host/4d8f7293-ebdd-40df-ac64-046a0f95bf5d/Og3XVZ7MXo.json"
 wait_animation_url = "https://lottie.host/9499938a-6540-47c9-bd3e-9fb49bbb4f92/op2Sqy2i5X.json"
 
 def load_animation(animation_url: str):  # animation_url should be always a json url from lottie
@@ -100,10 +133,12 @@ if uploaded_file is not None:
             with st.spinner("Extracting Text Please Wait ...", show_time=True):
                 animation_placeholder = st.empty()
                 with animation_placeholder.container():
-                    st_lottie(load_animation(wait_animation_url), height=350)    
+                    st_lottie(load_animation(wait_animation_url), height=350) 
 
-                extracted_text = get_extracted_text(file_name=file_name_to_check)
 
+                if text_file_in_sqs(file_name_to_check):        
+                    extracted_text = get_extracted_text(file_name=file_name_to_check)
+                
                 animation_placeholder.empty()  # remove animation after loading
 
             if extracted_text:  # text extracted Successfully
